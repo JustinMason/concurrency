@@ -1,10 +1,10 @@
 package jobpool
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 type JobPool[T any] struct {
@@ -12,18 +12,19 @@ type JobPool[T any] struct {
 	wg      sync.WaitGroup
 	jobChan chan *T
 	closed  *atomic.Bool
+	ctx     context.Context
 }
 
-func NewJobPool[T any](jobFunc func(T), concurrency int) *JobPool[T] {
+func NewJobPool[T any](ctx context.Context, jobFunc func(T), concurrency int) *JobPool[T] {
 	job := &JobPool[T]{
 		jobFunc: jobFunc,
 		wg:      sync.WaitGroup{},
 		jobChan: make(chan *T, concurrency*10),
 		closed:  &atomic.Bool{},
+		ctx:     ctx,
 	}
 
 	for i := 0; i < concurrency; i++ {
-
 		go func() {
 			for j := range job.jobChan {
 				job.jobFunc(*j)
@@ -35,19 +36,6 @@ func NewJobPool[T any](jobFunc func(T), concurrency int) *JobPool[T] {
 	return job
 }
 
-func (j *JobPool[T]) WaitTimeout(timeout time.Duration) bool {
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		j.wg.Wait()
-	}()
-	select {
-	case <-c:
-		return false // completed normally
-	case <-time.After(timeout):
-		return true // timed out
-	}
-}
 func (j *JobPool[T]) Wait() {
 	j.wg.Wait()
 }

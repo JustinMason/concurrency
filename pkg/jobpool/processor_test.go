@@ -1,8 +1,11 @@
 package jobpool
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -29,7 +32,7 @@ func (m *ProcessorMock) ProcessResults(job testJob) {
 
 func TestProcessJobPool(t *testing.T) {
 	processorMock := new(ProcessorMock)
-	processJobPool := NewJobPool(processorMock.ProcessResults, 2)
+	processJobPool := NewJobPool(context.Background(), processorMock.ProcessResults, 2)
 
 	testCases := []string{"test1", "test2", "test3"}
 	processJobs := []*testJob{}
@@ -41,7 +44,7 @@ func TestProcessJobPool(t *testing.T) {
 		processJobs = append(processJobs, process)
 	}
 
-	processJobPool.WaitTimeout(time.Second * 1)
+	processJobPool.Wait()
 
 	for range processJobs {
 		processorMock.AssertCalled(t, "ProcessResults", mock.Anything)
@@ -55,7 +58,10 @@ func (m *ProcessorMock) ProcessResultsTimeout(processJob testJob) {
 
 func TestProcessJobPoolWithTimeout(t *testing.T) {
 	processorMock := NewProcessorMock(time.Duration(200 * time.Millisecond))
-	processJobPool := NewJobPool(processorMock.ProcessResultsTimeout, 2)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancel()
+	processJobPool := NewJobPool(ctx, processorMock.ProcessResultsTimeout, 2)
 
 	testCases := []string{"test1"}
 
@@ -65,12 +71,19 @@ func TestProcessJobPoolWithTimeout(t *testing.T) {
 		processJobPool.Process(processJob)
 	}
 
-	assert.True(t, processJobPool.WaitTimeout(processorMock.timeout), "timeout")
+	processJobPool.Wait()
+	// Check if the context was timed out
+	err := ctx.Err()
+	assert.Error(t, err, "Expected an error but got none")
+	if err != nil {
+		assert.True(t, errors.Is(err, context.DeadlineExceeded), "Expected a DeadlineExceeded error")
+	}
+
 }
 
 func TestProcessJobPoolWithClose(t *testing.T) {
 	processorMock := NewProcessorMock(time.Duration(200 * time.Millisecond))
-	processJobPool := NewJobPool(processorMock.ProcessResultsTimeout, 2)
+	processJobPool := NewJobPool(context.Background(), processorMock.ProcessResultsTimeout, 2)
 
 	processJob := &testJob{}
 	processorMock.On("ProcessResultsTimeout", mock.Anything).Return()

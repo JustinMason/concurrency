@@ -32,7 +32,7 @@ func (m *ProcessorMock) ProcessResults(job testJob) {
 
 func TestProcessJobPool(t *testing.T) {
 	processorMock := new(ProcessorMock)
-	processJobPool := NewJobPool(context.Background(), processorMock.ProcessResults, 2)
+	processJobPool := NewJobPool(processorMock.ProcessResults, 2)
 
 	testCases := []string{"test1", "test2", "test3"}
 	processJobs := []*testJob{}
@@ -44,7 +44,7 @@ func TestProcessJobPool(t *testing.T) {
 		processJobs = append(processJobs, process)
 	}
 
-	processJobPool.Wait()
+	processJobPool.Wait(context.Background())
 
 	for range processJobs {
 		processorMock.AssertCalled(t, "ProcessResults", mock.Anything)
@@ -61,7 +61,7 @@ func TestProcessJobPoolWithTimeout(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer cancel()
-	processJobPool := NewJobPool(ctx, processorMock.ProcessResultsTimeout, 2)
+	processJobPool := NewJobPool(processorMock.ProcessResultsTimeout, 2)
 
 	testCases := []string{"test1"}
 
@@ -71,7 +71,7 @@ func TestProcessJobPoolWithTimeout(t *testing.T) {
 		processJobPool.Process(processJob)
 	}
 
-	processJobPool.Wait()
+	processJobPool.Wait(ctx)
 	// Check if the context was timed out
 	err := ctx.Err()
 	assert.Error(t, err, "Expected an error but got none")
@@ -83,12 +83,30 @@ func TestProcessJobPoolWithTimeout(t *testing.T) {
 
 func TestProcessJobPoolWithClose(t *testing.T) {
 	processorMock := NewProcessorMock(time.Duration(200 * time.Millisecond))
-	processJobPool := NewJobPool(context.Background(), processorMock.ProcessResultsTimeout, 2)
+	processJobPool := NewJobPool(processorMock.ProcessResultsTimeout, 2)
 
 	processJob := &testJob{}
 	processorMock.On("ProcessResultsTimeout", mock.Anything).Return()
 	processJobPool.Process(processJob)
-	processJobPool.Close()
+	processJobPool.Close(context.Background())
+
+	err := processJobPool.Process(processJob)
+	if err == nil {
+		t.Error("Expected error when adding job after close, got nil")
+	}
+
+}
+
+func TestProcessJobPoolWithCloseTimeout(t *testing.T) {
+	processorMock := NewProcessorMock(time.Duration(200 * time.Millisecond))
+	processJobPool := NewJobPool(processorMock.ProcessResultsTimeout, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancel()
+
+	processJob := &testJob{}
+	processorMock.On("ProcessResultsTimeout", mock.Anything).Return()
+	processJobPool.Process(processJob)
+	processJobPool.Close(ctx)
 
 	err := processJobPool.Process(processJob)
 	if err == nil {

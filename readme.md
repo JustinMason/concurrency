@@ -8,7 +8,7 @@ make writing concurrent processing easier by encapsulating the complexity
 and providing a go generic strategy.  This provides consistency in how this pattern
 can be used and helps prevent common issues, such as deadlocks, from occurring.
 
-Exmaple usage:
+Example usage:
 
 ```go
 

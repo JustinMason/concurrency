@@ -114,3 +114,20 @@ func TestProcessJobPoolWithCloseTimeout(t *testing.T) {
 	}
 
 }
+
+
+func TestProcessJobPoolWithCallingProcessMultipleTimes(t *testing.T) {
+	processorMock := NewProcessorMock(time.Duration(200 * time.Millisecond))
+	processJobPool := NewJobPool(processorMock.ProcessResultsTimeout, 2)
+
+	processJob := &testJob{}
+	processorMock.On("ProcessResultsTimeout", mock.Anything).Return()
+	processJobPool.Process(processJob)
+	processJobPool.Close(context.Background())
+
+	err := processJobPool.Process(processJob)
+	if err == nil {
+		t.Error("Expected error when adding job after close, got nil")
+	}
+
+}

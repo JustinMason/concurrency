@@ -41,7 +41,7 @@ func (j *JobPool[T]) Wait(ctx context.Context) {
 	j.wg.Wait()
 }
 
-func (j *JobPool[T]) Process(jobFunc *T) error {
+func (j *JobPool[T]) Process(jobData *T) error {
 
 	if j.closed.Load() {
 		return errors.New("job pool is closed")
@@ -49,7 +49,7 @@ func (j *JobPool[T]) Process(jobFunc *T) error {
 
 	j.wg.Add(1)
 
-	j.jobChan <- jobFunc
+	j.jobChan <- jobData
 
 	return nil
 }
